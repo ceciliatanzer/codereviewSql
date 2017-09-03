@@ -1,0 +1,90 @@
+--car list - v_car_list--
+
+SELECT
+c.id_car,
+cb.car_brand_name,
+ct.car_type_name,
+ft.fuel_type_name,
+pc.price_category_name,
+c.colour,
+c.plate_no,
+c.inreg_date
+FROM car c
+LEFT JOIN car_brand cb
+ON c.id_car_brand = cb.id_car_brand
+LEFT JOIN car_type ct
+ON c.id_car_type = ct.id_car_type
+LEFT JOIN fuel_type ft
+ON c.id_fuel_type = ft.id_fuel_type
+LEFT JOIN price_category pc
+ON c.id_price_category = pc.id_price_category
+WHERE c.b_inactive = 0
+AND cb.b_inactive = 0
+AND ct.b_inactive = 0
+AND ft.b_inactive = 0
+AND pc.b_inactive = 0
+
+--invoice list - v_invoice_list
+SELECT x.*,
+datediff(x.return, x.pickup) as 'days_of_usage',
+(SELECT SUM(ch.unitary_price*((100-IFNULL(rbc.discount_rate,0))/100))
+ FROM charge ch
+ LEFT JOIN ref_booking_charge rbc
+ ON rbc.id_charge = ch.id_charge 
+ WHERE rbc.id_booking = x.id_booking
+ AND ch.charge_name not like 'Pickup%')*datediff(x.return, x.pickup)+
+ IFNULL((SELECT SUM(ch.unitary_price*((100-IFNULL(rbc.discount_rate,0))/100))
+ FROM charge ch
+ LEFT JOIN ref_booking_charge rbc
+ ON rbc.id_charge = ch.id_charge 
+ WHERE rbc.id_booking = x.id_booking
+ AND ch.charge_name like 'Pickup%'),0) as 'invoice_amount'
+
+FROM
+
+(SELECT CONCAT(UPPER(p.last_name), ', ', p.first_name) as 'client',
+CASE p.gender WHEN 0 THEN 'Frau' ELSE 'Herr' END as 'form_of_address',
+CONCAT(c.country_code, '-', t.postal_code, ' ', t.town_name, ', ', s.street_name, ' ', a.house_no) as 'billing_address',
+b.booking_date,
+b.id_booking,
+i.invoice_no,
+i.issue_date,
+(SELECT tr.transfer_date_affected
+ FROM transfer tr
+ LEFT JOIN ref_booking_transfer rbt
+ ON rbt.id_transfer = tr.id_transfer
+ WHERE tr.id_transfer_type = 1
+ AND rbt.id_booking = b.id_booking) as 'pickup',
+ (SELECT tr.transfer_date_affected
+ FROM transfer tr
+ LEFT JOIN ref_booking_transfer rbt
+ ON rbt.id_transfer = tr.id_transfer
+ WHERE tr.id_transfer_type = 2
+ AND rbt.id_booking = b.id_booking) as 'return'
+FROM invoice i
+LEFT JOIN booking b
+ON b.id_booking = i.id_booking
+LEFT JOIN user_account ua
+ON ua.id_user = b.id_user
+LEFT JOIN person p
+ON p.id_person = ua.id_person
+LEFT JOIN billing_data bd
+ON bd.id_booking = b.id_booking
+LEFT JOIN address a
+ON a.id_address = bd.id_address
+LEFT JOIN street s
+ON s.id_street = a.id_street
+LEFT JOIN town t
+ON t.id_town = s.id_town
+LEFT JOIN country c
+ON c.id_country = t.id_country
+
+WHERE i.b_inactive = 0
+AND i.b_inactive = 0
+AND b.b_inactive = 0
+AND ua.b_inactive = 0
+AND p.b_inactive = 0
+AND a.b_inactive = 0
+AND s.b_inactive = 0
+AND t.b_inactive = 0
+AND c.b_inactive = 0) as x
